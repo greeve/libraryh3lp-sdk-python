@@ -1,17 +1,97 @@
-from __future__ import unicode_literals
+from __future__ import absolute_import, unicode_literals
 from builtins import object
 import configparser
 import hashlib
 import os
 import requests
+import requests.utils
+
+from . import _types
 
 # Exists only to distinguish LibraryH3lp errors from other generated
 # errors.
 class LH3Error(Exception):
     pass
 
+class Client(object):
+    default_config = {
+        'salt': 'you should probably change this',
+        'scheme': 'https',
+        'server': 'libraryh3lp.com',
+        'timezone': 'UTC',
+        'version': 'v2'
+    }
+
+    def __init__(self, profile = None):
+        self._config = None
+        self._api = None
+
+        if profile:
+            self.load_config(profile)
+
+    def load_config(self, profile = None):
+        config = configparser.SafeConfigParser(Client.default_config)
+        config.read([os.path.expanduser('~/.lh3/config'), os.path.expanduser('~/.lh3/credentials')])
+
+        options = config.defaults().copy()
+        options.update(dict(config.items('default')))
+        if config.has_section(profile):
+            options.update(dict(config.items(profile)))
+
+        self._config = options
+
+    def set_credentials(self, username, password = None):
+        self.set_options(username = username, password = password)
+
+    def set_options(self, **options):
+        self._config.update(options)
+
+    def api(self, config = None):
+        if self._api is None:
+            options = self._config.copy()
+            if config:
+                options.update(config)
+            self._api = _API(options)
+
+        return self._api
+
+    # Returns a reference to an element.
+    def one(self, route, id):
+        return self.one_url(self.url(route, id))
+
+    # Returns a reference to a collection.
+    def all(self, route):
+        return self.all_url(self.url(route))
+
+    def one_url(self, url):
+        return _Element(self.api(), url)
+
+    def all_url(self, url):
+        return _Collection(self.api(), url)
+
+    def url(self, *args):
+        return '/'.join([''] + map(str, args))
+
+    def account(self):
+        if self.is_admin():
+            return self.one('accounts', self.account_id())
+        else:
+            return None
+
+    def is_admin(self):
+        return self.account_id() is not None
+
+    def account_id(self):
+        return self.api().account_id
+
+    def conversations(self):
+        return _Conversations(self.api(), self.url('conversations'))
+
+    def reports(self):
+        return _Reports(self.api(), self.url('reports'))
+
 # Represents a connection to the server.
-class API(object):
+class _API(object):
     versions = {
         'v1': '2011-12-03',
         'v2': '2013-07-21',
@@ -19,14 +99,8 @@ class API(object):
     }
 
     def __init__(self, config):
-        self.salt = config.get('salt')
-        self.server = config.get('server')
-        self.timezone = config.get('timezone')
-        self.version = config.get('version')
-
-        self.username = config.get('username')
-        self.password = config.get('password')
-        if self.username is None:
+        self._config = config
+        if not self.username:
             raise LH3Error('provide credentials for server authentication')
 
         self.session = requests.Session()
@@ -35,14 +109,13 @@ class API(object):
 
         self.login()
 
-    def verify_login(self):
-        result = self.session.get(self.api('/auth/verify'))
-        return result.ok and result.json().get('success', False)
+    def __getattr__(self, name):
+        return self._config.get(name)
 
     def login(self):
         result = self.session.post(
-            self.api('/auth/login'),
-            data = {'username': self.username, 'password': self.get_password()})
+            self._api('/auth/login'),
+            data = {'username': self.username, 'password': self._get_password()})
         if not result.ok:
             raise LH3Error('failed to authenticate with server')
 
@@ -52,108 +125,82 @@ class API(object):
 
         self.account_id = json.get('account_id')
 
-    def get_password(self):
+        if not self.session.cookies.get('libraryh3lp-session'):
+            session_uuid = result.headers['Set-Cookie'].split('=')[1].split(';')[0]
+            requests.utils.add_dict_to_cookiejar(
+                self.session.cookies, {'libraryh3lp-session': session_uuid})
+
+    def _get_password(self):
         return self.password or hashlib.sha256(self.salt + self.username).hexdigest()
 
     def delete(self, version, path = None, **kwargs):
-        return self.maybe_json(self.session.delete(self.api(version, path), **kwargs))
+        return self._request('delete', version, path, kwargs)
 
     def get(self, version, path = None, **kwargs):
-        return self.maybe_json(self.session.get(self.api(version, path), **kwargs))
+        return self._request('get', version, path, kwargs)
 
     def patch(self, version, path = None, **kwargs):
-        return self.maybe_json(self.session.patch(self.api(version, path), **kwargs))
+        return self._request('patch', version, path, kwargs)
 
     def post(self, version, path = None, **kwargs):
-        return self.maybe_json(self.session.post(self.api(version, path), **kwargs))
+        return self._request('post', version, path, kwargs)
 
     def put(self, version, path = None, **kwargs):
-        return self.maybe_json(self.session.put(self.api(version, path), **kwargs))
+        return self._request('put', version, path, kwargs)
 
-    def maybe_json(self, result):
+    def _request(self, method, version, path = None, kwargs = None):
+        request = getattr(self.session, method)
+        result = request(self._api(version, path), **kwargs)
+        return self._maybe_json(result)
+
+    def _maybe_json(self, result):
         try:
             return result.json()
         except ValueError as e:
             return result.text
 
-    def api(self, version, path = None):
-        if path is None:
+    def _api(self, version, path = None):
+        if not path:
             path = version
             version = self.version
 
-        version = API.versions.get(version, version)
-        return 'https://{}/{}{}'.format(self.server, version, path)
-
-# An Element is a reference to an item on the server.  It does not
-# contain any actual data.  Call `get` to fetch the referenced data
-# from the server.
-class Element(object):
-    def __init__(self, api, path):
-        self.api = api
-        self.path = path
-
-    def delete(self):
-        return self.api.delete(self.url())
-
-    def get(self):
-        return self.api.get(self.url())
-
-    def get_list(self, route):
-        return self.api.get(self.url(route))
-
-    def patch(self, data):
-        return self.api.patch(self.url(), data)
-
-    def post(self, route, data):
-        return self.api.post(self.url(route), data)
-
-    def put(self, data):
-        return self.api.put(self.url(), data)
-
-    # Returns a reference to a child element.
-    def one(self, route, id):
-        return self.one_url(self.url(route, id))
-
-    # Returns a reference to a child collection.  Call `get_list` to
-    # fetch the contents of that collection.
-    def all(self, route):
-        return self.all_url(self.url(route))
-
-    def one_url(self, url):
-        return Element(self.api, url)
-
-    def all_url(self, url):
-        return Collection(self.api, url)
-
-    def url(self, *args):
-        args = tuple([self.path] + list(args))
-        return '/'.join(map(str, args))
+        version = _API.versions.get(version, version)
+        return '{}://{}/{}{}'.format(self.scheme, self.server, version, path)
 
 # A Collection is a reference to a group of items on the server.  It
 # does not contain any actual data.  Call `get_list` to fetch the
 # referenced data from the server.
-class Collection(object):
+class _Collection(object):
     def __init__(self, api, path):
-        self.api = api
-        self.path = path
+        self._api = api
+        self._path = path
 
     def delete(self):
-        return self.api.delete(self.url())
+        return self._api.delete(self.url())
 
-    def get(self, id):
-        return self.api.get(self.url(id))
+    def get(self, id, params = None):
+        return self._api.get(self.url(id), params = params)
 
-    def get_list(self):
-        return self.api.get(self.url())
+    def get_list(self, params = None):
+        return self._api.get(self.url(), params = params)
 
-    def patch(self, id, data):
-        return self.api.patch(self.url(id), data)
+    def patch(self, id, json):
+        return self._api.patch(self.url(id), json = json)
 
-    def post(self, data):
-        return self.api.post(self.url(), data)
+    def post(self, json):
+        return self._api.post(self.url(), json = json)
 
-    def put(self, data):
-        return self.api.put(self.url(data['id']), data)
+    def put(self, json):
+        return self._api.put(self.url(data['id']), json = json)
+
+    def custom_get(self, path, params = None):
+        return self._api.get(self.url(path), params = params)
+
+    def custom_get_list(self, path, params = None):
+        return self._api.get(self.url(path), params = params)
+
+    def custom_post(self, path, json):
+        return self._api.post(self.url(path), json = json)
 
     # Returns a reference to a child element.  Call `get` to fetch the
     # data instead.
@@ -165,84 +212,102 @@ class Collection(object):
         return self.all_url(self.url(route))
 
     def one_url(self, url):
-        return Element(self.api, url)
+        return _Element(self._api, url)
 
     def all_url(self, url):
-        return Collection(self.api, url)
+        return _Collection(self._api, url)
 
     def url(self, *args):
-        args = tuple([self.path] + list(args))
-        return '/'.join(map(str, args))
+        return '/'.join([self._path] + map(str, args))
 
-# START HERE
-class Client(object):
-    default_config = {
-        'salt': 'you should probably change this',
-        'server': 'libraryh3lp.com',
-        'timezone': 'UTC',
-        'version': 'v2'
-    }
+# An Element is a reference to an item on the server.  It does not
+# contain any actual data.  Call `get` to fetch the referenced data
+# from the server.
+class _Element(object):
+    def __init__(self, api, path):
+        self._api = api
+        self._path = path
 
-    def __init__(self, profile = None):
-        self.config = None
-        self.api = None
+    def delete(self):
+        return self._api.delete(self.url())
 
-        if profile:
-            self.load_config(profile)
+    def get(self, params = None):
+        return self._api.get(self.url(), params = params)
 
-    def with_config(self, profile = None):
-        self.load_config(profile)
-        return self
+    def get_list(self, route, params = None):
+        return self._api.get(self.url(route), params = params)
 
-    def load_config(self, profile = None):
-        config = configparser.SafeConfigParser(Client.default_config)
-        config.read([os.path.expanduser('~/.lh3/config'), os.path.expanduser('~/.lh3/credentials')])
+    def patch(self, json):
+        return self._api.patch(self.url(), json = json)
 
-        options = config.defaults().copy()
-        options.update(dict(config.items('default')))
-        if config.has_section(profile):
-            options.update(dict(config.items(profile)))
+    def post(self, route, json):
+        return self._api.post(self.url(route), json = json)
 
-        self.config = options
+    def put(self, json):
+        return self._api.put(self.url(), json = json)
 
-    def with_credentials(self, username, password = None):
-        self.set_credentials(username, password)
-        return self
-
-    def set_credentials(self, username, password = None):
-        self.config['username'] = username
-        self.config['password'] = password
-
-    def with_options(self, **options):
-        self.config.update(options)
-        return self
-
-    def get_api(self, config = None):
-        if self.api is None:
-            options = self.config.copy()
-            if config is not None:
-                options.update(config)
-            self.api = API(options)
-
-        return self.api
-
-    def is_admin(self):
-        return self.get_api().account_id is not None
-
-    # Returns a reference to an element.
+    # Returns a reference to a child element.
     def one(self, route, id):
         return self.one_url(self.url(route, id))
 
-    # Returns a reference to a collection.
+    # Returns a reference to a child collection.  Call `get_list` to
+    # fetch the contents of that collection.
     def all(self, route):
         return self.all_url(self.url(route))
 
     def one_url(self, url):
-        return Element(self.get_api(), url)
+        return _Element(self._api, url)
 
     def all_url(self, url):
-        return Collection(self.get_api(), url)
+        return _Collection(self._api, url)
 
     def url(self, *args):
-        args = tuple([''] + list(args))
-        return '/'.join(map(str, args))
+        return '/'.join([self._path] + map(str, args))
+
+class _Conversations(_Collection):
+    def __init__(self, api, path):
+        super(_Conversations, self).__init__(api, path)
+
+    def list_year(self, year):
+        return self.custom_get_list(year)
+
+    def list_month(self, year, month):
+        return self.custom_get_list('{}/{}'.format(year, month))
+
+    def list_day(self, year, month, day, to = None):
+        path = '{}/{}/{}'.format(year, month, day)
+        return self.custom_get_list(path, params = {'to': to, 'format': 'json'})
+
+    def anonymize_conversations(self, ids):
+        return self.custom_post('anonymize-conversations', json = {'ids': ids})
+
+    def archive_conversations(self, ids):
+        return self.custom_get('archive', params = {'ids': ids})
+
+    def delete_conversations(self, ids):
+        return self.custom_post('delete-conversations', json = {'ids': ids})
+
+    def delete_transcripts(self, ids):
+        return self.custom_post('delete-transcripts', json = {'ids': ids})
+
+class _Reports(_Collection):
+    def __init__(self, api, path):
+        super(_Reports, self).__init__(api, path)
+
+    def chats_per_hour(self, **kwargs):
+        return self.custom_get('chats-per-hour', params = kwargs)
+
+    def chats_per_month(self, **kwargs):
+        return self.custom_get('chats-per-month', params = kwargs)
+
+    def chats_per_operator(self, **kwargs):
+        return self.custom_get('chats-per-operator', params = kwargs)
+
+    def chats_per_profile(self, **kwargs):
+        return self.custom_get('chats-per-profile', params = kwargs)
+
+    def chats_per_protocol(self, **kwargs):
+        return self.custom_get('chats-per-protocol', params = kwargs)
+
+    def chats_per_queue(self, **kwargs):
+        return self.custom_get('chats-per-queue', params = kwargs)
