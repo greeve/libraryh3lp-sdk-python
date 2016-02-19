@@ -6,8 +6,6 @@ import os
 import requests
 import requests.utils
 
-from . import _types
-
 # Exists only to distinguish LibraryH3lp errors from other generated
 # errors.
 class LH3Error(Exception):
