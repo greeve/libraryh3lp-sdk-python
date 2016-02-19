@@ -1,5 +1,5 @@
 from __future__ import absolute_import, unicode_literals
-from builtins import object
+from builtins import map, object
 import configparser
 import hashlib
 import os
@@ -68,7 +68,7 @@ class Client(object):
         return _Collection(self.api(), url)
 
     def url(self, *args):
-        return '/'.join([''] + map(str, args))
+        return '/'.join([''] + list(map(str, args)))
 
     def account(self):
         if self.is_admin():
@@ -216,7 +216,7 @@ class _Collection(object):
         return _Collection(self._api, url)
 
     def url(self, *args):
-        return '/'.join([self._path] + map(str, args))
+        return '/'.join([self._path] + list(map(str, args)))
 
 # An Element is a reference to an item on the server.  It does not
 # contain any actual data.  Call `get` to fetch the referenced data
@@ -260,7 +260,7 @@ class _Element(object):
         return _Collection(self._api, url)
 
     def url(self, *args):
-        return '/'.join([self._path] + map(str, args))
+        return '/'.join([self._path] + list(map(str, args)))
 
 class _Conversations(_Collection):
     def __init__(self, api, path):
