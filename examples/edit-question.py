@@ -11,18 +11,21 @@ import os
 import sys
 import tempfile
 
-faq_id, question_id = sys.argv
+faq_id, question_id = sys.argv[1:]
 
 client = lh3.api.Client()
-question = client.one('faqs', faq_id).one('questions', question_id).get(format = 'json')
+question = client.one('faqs', faq_id).one('questions', question_id).get(params = {'format': 'json'})
 
 EDITOR = os.environ.get('EDITOR', 'vim')
 
-with tempfile.NamedTemporaryFile(suffix = '.tmp') as tempfile:
-    tempfile.write(question['answer'])
-    tempfile.flush()
-    call([EDITOR, tempfile.name])
+_, temp = tempfile.mkstemp(suffix = '.tmp')
 
-    with file(tempfile) as f:
-        answer = f.read()
-        client.one('faqs', faq_id).one('questions', question_id).patch({'answer': answer})
+with open(temp, 'w') as f:
+    f.write(question['answer'])
+    f.flush()
+
+call([EDITOR, temp])
+
+with open(temp, 'r') as f:
+    answer = f.read()
+    client.one('faqs', faq_id).one('questions', question_id).patch({'answer': answer})

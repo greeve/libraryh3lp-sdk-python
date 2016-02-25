@@ -1,10 +1,6 @@
 Chat
 ----
 
-TODO chat-bot.py
-    faq search
-    email followup
-
 check-service.py
     Look to see if your services are online and, if not, why not.  Also
     reports if you have too few operators staffing.

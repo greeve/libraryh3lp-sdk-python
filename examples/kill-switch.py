@@ -6,16 +6,18 @@
 # mistakenly think you're available.
 
 import lh3.api
+import sys
 
-def engage(queue_name):
+def engage(name):
     client = lh3.api.Client()
-    queue = client.find_queue_by_name(queue_name)
+    queue = client.find_queue_by_name(name)
     operators = queue.all('operators').get_list()
     for operator in operators:
-        status = operator['userShow']
+        status = operator['show']
         if status == 'chat' or status == 'available':
-            print('{} forgot to log out!'.format(operator['user']))
+            print('{} forgot to log out!'.format(operator['name']))
             queue.one('operators', operator['id']).patch({'enabled': False})
 
-if __name__ = __main__:
-    engage('my-queue')
+if __name__ == '__main__':
+    name = sys.argv[1]
+    engage(name)

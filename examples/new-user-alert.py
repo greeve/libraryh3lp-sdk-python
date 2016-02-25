@@ -10,8 +10,11 @@ import lh3.api
 DATAFILE = '/var/lib/lh3/users.txt'
 
 prev_users = []
-with open(DATAFILE) as f:
-    prev_users = json.load(f)
+try:
+    with open(DATAFILE) as f:
+        prev_users = json.load(f)
+except:
+    pass
 prev_ids = [u['id'] for u in prev_users]
 
 client = lh3.api.Client()
@@ -21,5 +24,5 @@ for user in users:
     if user['id'] not in prev_ids:
         print('{} is a new user account, it may need attention'.format(user['name']))
 
-with OPEN(DATAFILE, 'wb') as f:
+with open(DATAFILE, 'wb') as f:
     json.dump(users, f)

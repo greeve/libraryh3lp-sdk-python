@@ -23,7 +23,7 @@ def count_operators(client, queue):
     for operator in operators:
         if not operator['enabled']:
             num_staffing += 1
-        status = operator['userShow']
+        status = operator['show']
         if status == 'chat' or status == 'available':
             num_available += 1
 
@@ -46,7 +46,7 @@ def why_offline(client, queue):
         print('  nobody is available to take questions')
 
 def check_queue(client, queue):
-    result = requests.get('http://libraryh3lp.com/presence/jid/{}@chat.libraryh3lp.com/text'.format(queue))
+    result = requests.get('http://libraryh3lp.com/presence/jid/{}/chat.libraryh3lp.com/text'.format(queue))
     status = result.text
     if status == 'chat' or status == 'available':
         check_min_operators(client, queue)

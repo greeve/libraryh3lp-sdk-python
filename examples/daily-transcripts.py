@@ -17,7 +17,7 @@ client = lh3.api.Client()
 
 # Fetch yesterday's chats.
 yesterday = datetime.today() - timedelta(days = 1)
-chats = client.list_day(yesterday.year, yesterday.month, yesterday.day)
+chats = client.chats().list_day(yesterday.year, yesterday.month, yesterday.day)
 
 for chat in chats:
     # Download the chat transcript.
@@ -28,7 +28,7 @@ for chat in chats:
     message = MIMEMultipart('alternative')
     message['From'] = INBOX
     message['To'] = INBOX
-    message['Subject'] = 'Chat {} on {}/{}/{}'.format(id, yesterday.year, yesterday,month, yesterday.day)
+    message['Subject'] = 'Chat {} on {}/{}/{}'.format(id, yesterday.year, yesterday.month, yesterday.day)
     html = MIMEText('transcript', 'html')
     message.attach(html)
     s = smtplib.SMTP('localhost')

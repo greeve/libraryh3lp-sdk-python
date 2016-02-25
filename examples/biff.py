@@ -10,11 +10,12 @@
 from datetime import datetime
 
 import lh3.api
+import time
 
 # Fetch all email threads, including their read status and the time of
 # the last message.
 def current_threads(client, mailboxes):
-    threads = client.all('emails').get_list(dict(mailboxes = mailboxes))
+    threads = client.all('emails').get_list({'mailboxes': mailboxes})
     for t in threads:
         t['updated'] = datetime.strptime(t['updated'], '%Y-%m-%d %I:%M %P')
     return threads
@@ -32,7 +33,7 @@ def notify_user(threads):
 
 def main():
     client = lh3.api.Client()
-    mailboxes = [m['id'] for m in client.all('emails').all('mailboxes').get_list()]
+    mailboxes = [m['id'] for m in client.all('emails').get_list('mailboxes')]
 
     prev_threads = current_threads(client, mailboxes)
     while True:

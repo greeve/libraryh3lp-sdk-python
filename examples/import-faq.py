@@ -8,11 +8,12 @@
 
 import csv
 import lh3.api
+import sys
 
-MY_FAQ_ID = 1234
+faq_id = sys.argv[1]
 
 client = lh3.api.Client()
-faq = client.one('faqs', MY_FAQ_ID).all('questions')
+faq = client.one('faqs', faq_id).all('questions')
 
 with open('faq.csv', 'rb') as csvfile:
     reader = csv.reader(csvfile)

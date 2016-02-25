@@ -10,7 +10,7 @@ from datetime import datetime
 import lh3.api
 
 SCHEDULE = [
-    [0, { 'refqueue': []}]
+    [0, { 'refqueue': []}],
     [8, {'refqueue': ['alice', 'bob']}],
     [12, {'refqueue': ['bob', 'charles']}],
     [16, {'refqueue': ['alice', 'charles']}],
@@ -24,8 +24,8 @@ def enable_queue(queue, operators):
     assignments = client.find_queue_by_name(queue).all('operators')
     for assignment in assignments.get_list():
         enabled = assignment['user'] in operators
-        if enabled <> assignment['enabled']:
-            assignments.one(assignment['userId']).patch({'enabled': enabled})
+        if enabled != assignment['enabled']:
+            assignments.one(assignment['id']).patch({'enabled': enabled})
 
 for i in range(len(SCHEDULE)):
     curr = SCHEDULE[i]

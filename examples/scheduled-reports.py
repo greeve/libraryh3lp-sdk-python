@@ -6,15 +6,15 @@
 
 from datetime import datetime, timedelta
 
-import lh3
+import lh3.api
 
 today = datetime.today()
 monday = today - timedelta(days = today.weekday())
-last_monday = monday - timedelta(days = 7)
-last_sunday = monday - timedelta(days = 1)
+last_monday = (monday - timedelta(days = 7)).strftime('%Y-%m-%d')
+last_sunday = (monday - timedelta(days = 1)).strftime('%Y-%m-%d')
 
 client = lh3.api.Client()
 chats_per_operator = \
-    client.all('reports').custom_get('chats-per-operator', dict(start = last_monday, end = last_sunday)
+    client.reports().chats_per_operator(start = last_monday, end = last_sunday)
 
 print(chats_per_operator)

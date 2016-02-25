@@ -13,7 +13,7 @@ client = lh3.api.Client()
 
 # Fetch today's chats.
 now = datetime.now()
-chats = client.list_day(now.year, now.month, now.day)
+chats = client.chats().list_day(now.year, now.month, now.day)
 
 num_active = 0
 num_unanswered = 0

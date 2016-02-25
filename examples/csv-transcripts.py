@@ -16,13 +16,13 @@ import zipfile
 
 client = lh3.api.Client()
 today = date.today()
-chats = client.list_day(today.year, today.month, today.day)
+chats = client.chats().list_day(today.year, today.month, today.day)
 ids = [c['id'] for c in chats]
 
 writer = csv.writer(sys.stdout)
 
 with tempfile.TemporaryFile() as f:
-    client.download_transcripts(ids, f)
+    client.chats().download_xml(ids, f)
     f.seek(0)
 
     zip = zipfile.ZipFile(f)

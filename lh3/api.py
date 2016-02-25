@@ -1,5 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from builtins import map, object
+from contextlib import closing
 import configparser
 import hashlib
 import os
@@ -23,9 +24,9 @@ class Client(object):
     def __init__(self, profile = None):
         self._config = None
         self._api = None
-
-        if profile:
-            self.load_config(profile)
+        self._queues = {}
+        self._users = {}
+        self.load_config(profile)
 
     def load_config(self, profile = None):
         config = configparser.SafeConfigParser(Client.default_config)
@@ -82,11 +83,31 @@ class Client(object):
     def account_id(self):
         return self.api().account_id
 
-    def conversations(self):
-        return _Conversations(self.api(), self.url('conversations'))
+    def chats(self):
+        return _Chats(self.api())
 
     def reports(self):
-        return _Reports(self.api(), self.url('reports'))
+        return _Reports(self.api())
+
+    def find_queue_by_name(self, queue):
+        if queue not in self._queues:
+            for q in self.all('queues').get_list():
+                self._queues[q['name']] = q['id']
+
+        if queue not in self._queues:
+            return None
+
+        return self.one('queues', self._queues[queue])
+
+    def find_user_by_name(self, user):
+        if user not in self._users:
+            for u in self.all('users').get_list():
+                self._users[u['name']] = u['id']
+
+        if user not in self._users:
+            return None
+
+        return self.one('users', self._users[user])
 
 # Represents a connection to the server.
 class _API(object):
@@ -132,24 +153,27 @@ class _API(object):
         return self.password or hashlib.sha256(self.salt + self.username).hexdigest()
 
     def delete(self, version, path = None, **kwargs):
-        return self._request('delete', version, path, kwargs)
+        return self._request('delete', version, path, **kwargs)
 
     def get(self, version, path = None, **kwargs):
-        return self._request('get', version, path, kwargs)
+        return self._request('get', version, path, **kwargs)
 
     def patch(self, version, path = None, **kwargs):
-        return self._request('patch', version, path, kwargs)
+        return self._request('patch', version, path, **kwargs)
 
     def post(self, version, path = None, **kwargs):
-        return self._request('post', version, path, kwargs)
+        return self._request('post', version, path, **kwargs)
 
     def put(self, version, path = None, **kwargs):
-        return self._request('put', version, path, kwargs)
+        return self._request('put', version, path, **kwargs)
 
-    def _request(self, method, version, path = None, kwargs = None):
-        request = getattr(self.session, method)
-        result = request(self._api(version, path), **kwargs)
+    def _request(self, method, version, path = None, **kwargs):
+        result = self.raw_request(method, version, path, **kwargs)
         return self._maybe_json(result)
+
+    def raw_request(self, method, version, path = None, **kwargs):
+        request = getattr(self.session, method)
+        return request(self._api(version, path), **kwargs)
 
     def _maybe_json(self, result):
         try:
@@ -191,11 +215,11 @@ class _Collection(object):
     def put(self, json):
         return self._api.put(self.url(data['id']), json = json)
 
-    def custom_get(self, path, params = None):
-        return self._api.get(self.url(path), params = params)
+    def custom_get(self, path, **kwargs):
+        return self._api.get(self.url(path), **kwargs)
 
-    def custom_get_list(self, path, params = None):
-        return self._api.get(self.url(path), params = params)
+    def custom_get_list(self, path, **kwargs):
+        return self._api.get(self.url(path), **kwargs)
 
     def custom_post(self, path, json):
         return self._api.post(self.url(path), json = json)
@@ -216,7 +240,7 @@ class _Collection(object):
         return _Collection(self._api, url)
 
     def url(self, *args):
-        return '/'.join([self._path] + list(map(str, args)))
+        return '/'.join([self._path or ''] + list(map(str, args)))
 
 # An Element is a reference to an item on the server.  It does not
 # contain any actual data.  Call `get` to fetch the referenced data
@@ -229,11 +253,11 @@ class _Element(object):
     def delete(self):
         return self._api.delete(self.url())
 
-    def get(self, params = None):
-        return self._api.get(self.url(), params = params)
+    def get(self, **kwargs):
+        return self._api.get(self.url(), **kwargs)
 
-    def get_list(self, route, params = None):
-        return self._api.get(self.url(route), params = params)
+    def get_list(self, route, **kwargs):
+        return self._api.get(self.url(route), **kwargs)
 
     def patch(self, json):
         return self._api.patch(self.url(), json = json)
@@ -262,50 +286,56 @@ class _Element(object):
     def url(self, *args):
         return '/'.join([self._path] + list(map(str, args)))
 
-class _Conversations(_Collection):
-    def __init__(self, api, path):
-        super(_Conversations, self).__init__(api, path)
+class _Chats(_Collection):
+    def __init__(self, api):
+        super(_Chats, self).__init__(api, None)
 
     def list_year(self, year):
-        return self.custom_get_list(year)
+        return self.all('activity').custom_get_list(year)
 
     def list_month(self, year, month):
-        return self.custom_get_list('{}/{}'.format(year, month))
+        return self.all('activity').custom_get_list('{}/{}'.format(year, month))
 
     def list_day(self, year, month, day, to = None):
         path = '{}/{}/{}'.format(year, month, day)
-        return self.custom_get_list(path, params = {'to': to, 'format': 'json'})
+        return self.all('activity').custom_get_list(path, params = {'to': to, 'format': 'json'})
 
-    def anonymize_conversations(self, ids):
-        return self.custom_post('anonymize-conversations', json = {'ids': ids})
+    def anonymize(self, ids):
+        return self.all('chats').custom_post('anonymize', json = {'id[]': ids})
 
-    def archive_conversations(self, ids):
-        return self.custom_get('archive', params = {'ids': ids})
+    def download_xml(self, ids, out = None):
+        if not out:
+            return self._api.raw_request('get', '/chats/download_xml', params = {'id[]': ids})
 
-    def delete_conversations(self, ids):
-        return self.custom_post('delete-conversations', json = {'ids': ids})
+        response = self._api.raw_request('get', '/chats/download_xml', params = {'id[]': ids}, stream = True)
+        with closing(response) as r:
+            for chunk in r.iter_content(chunk_size = 1024):
+                out.write(chunk)
+
+    def delete_chats(self, ids):
+        return self.all('chats').custom_post('delete_chats', json = {'id[]': ids})
 
     def delete_transcripts(self, ids):
-        return self.custom_post('delete-transcripts', json = {'ids': ids})
+        return self.all('chats').custom_post('delete_transcripts', json = {'id[]': ids})
 
 class _Reports(_Collection):
-    def __init__(self, api, path):
-        super(_Reports, self).__init__(api, path)
+    def __init__(self, api):
+        super(_Reports, self).__init__(api, None)
 
     def chats_per_hour(self, **kwargs):
-        return self.custom_get('chats-per-hour', params = kwargs)
+        return self._api.get('v1', '/reports/chats-per-hour', params = kwargs)
 
     def chats_per_month(self, **kwargs):
-        return self.custom_get('chats-per-month', params = kwargs)
+        return self._api.get('v1', '/reports/chats-per-month', params = kwargs)
 
     def chats_per_operator(self, **kwargs):
-        return self.custom_get('chats-per-operator', params = kwargs)
+        return self._api.get('v1', '/reports/chats-per-operator', params = kwargs)
 
     def chats_per_profile(self, **kwargs):
-        return self.custom_get('chats-per-profile', params = kwargs)
+        return self._api.get('v1', '/reports/chats-per-profile', params = kwargs)
 
     def chats_per_protocol(self, **kwargs):
-        return self.custom_get('chats-per-protocol', params = kwargs)
+        return self._api.get('v1', '/reports/chats-per-protocol', params = kwargs)
 
     def chats_per_queue(self, **kwargs):
-        return self.custom_get('chats-per-queue', params = kwargs)
+        return self._api.get('v1', '/reports/chats-per-queue', params = kwargs)
