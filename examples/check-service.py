@@ -13,6 +13,17 @@ import requests
 QUEUES = ['reference', 'ill']
 MIN_OPERATORS = 2
 
+# Librarians are considered available if their status is chatty
+# or available.
+def is_available(operator):
+    status = operator['show']
+    return status == u'chat' or status == u'available'
+
+# Librarians are considered to be actively staffing a queue if they are
+# available and they are opted into the queue assignment.
+def is_staffing(operator):
+    return is_available(operator) and operator['enabled']
+
 # Find the number of librarians that are staffing queues, and the
 # number that are currently available to handle new chats.
 def count_operators(client, queue):
@@ -21,10 +32,9 @@ def count_operators(client, queue):
 
     operators = client.find_queue_by_name(queue).all('operators').get_list()
     for operator in operators:
-        if not operator['enabled']:
+        if is_staffing(operator):
             num_staffing += 1
-        status = operator['show']
-        if status == 'chat' or status == 'available':
+        if is_available(operator):
             num_available += 1
 
     return dict(num_staffing = num_staffing, num_available = num_available)
@@ -33,9 +43,9 @@ def count_operators(client, queue):
 def check_min_operators(client, queue):
     operators = count_operators(client, queue)
     if operators['num_staffing'] < MIN_OPERATORS:
-        print('  only {num_staffing} operators staffing the queue'.format(operators))
+        print('  only {num_staffing} operators staffing the queue'.format(**operators))
     if operators['num_available'] < MIN_OPERATORS:
-        print('  only {num_available} operators are available'.format(operators))
+        print('  only {num_available} operators are available'.format(**operators))
 
 # Why is my service offline?
 def why_offline(client, queue):
@@ -49,6 +59,7 @@ def check_queue(client, queue):
     result = requests.get('http://libraryh3lp.com/presence/jid/{}/chat.libraryh3lp.com/text'.format(queue))
     status = result.text
     if status == 'chat' or status == 'available':
+        print('{} is available: {}'.format(queue, status))
         check_min_operators(client, queue)
     else:
         print('{} is not available: {}'.format(queue, status))

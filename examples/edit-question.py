@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 
+# Takes two command line arguments, FAQ ID and Question ID.
 faq_id, question_id = sys.argv[1:]
 
 client = lh3.api.Client()

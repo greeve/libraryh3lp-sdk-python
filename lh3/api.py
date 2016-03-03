@@ -44,6 +44,8 @@ class Client(object):
 
     def set_options(self, **options):
         self._config.update(options)
+        if self._api is not None:
+            self._api = _API(self._config)
 
     def api(self, config = None):
         if self._api is None:
@@ -284,7 +286,7 @@ class _Element(object):
         return _Collection(self._api, url)
 
     def url(self, *args):
-        return '/'.join([self._path] + list(map(str, args)))
+        return '/'.join([self._path] + list(map(str, [arg for arg in args if arg])))
 
 class _Chats(_Collection):
     def __init__(self, api):
@@ -301,7 +303,7 @@ class _Chats(_Collection):
         return self.all('activity').custom_get_list(path, params = {'to': to, 'format': 'json'})
 
     def anonymize(self, ids):
-        return self.all('chats').custom_post('anonymize', json = {'id[]': ids})
+        return self._api.raw_request('get', '/chats/anonymize', params = {'id[]': ids})
 
     def download_xml(self, ids, out = None):
         if not out:
@@ -313,10 +315,10 @@ class _Chats(_Collection):
                 out.write(chunk)
 
     def delete_chats(self, ids):
-        return self.all('chats').custom_post('delete_chats', json = {'id[]': ids})
+        return self._api.raw_request('get', '/chats/delete_chats', params = {'id[]': ids})
 
     def delete_transcripts(self, ids):
-        return self.all('chats').custom_post('delete_transcripts', json = {'id[]': ids})
+        return self._api.raw_request('get', '/chats/delete_transcripts', params = {'id[]': ids})
 
 class _Reports(_Collection):
     def __init__(self, api):

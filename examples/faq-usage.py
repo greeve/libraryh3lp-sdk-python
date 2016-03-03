@@ -7,6 +7,7 @@
 import lh3.api
 import sys
 
+# Takes one command line argument, FAQ ID.
 faq_id = sys.argv[1]
 
 client = lh3.api.Client()

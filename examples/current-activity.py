@@ -22,7 +22,7 @@ for chat in chats:
         continue
 
     # Only count those starting in the last 15 minutes.
-    started = datetime.strptime('%Y-%m-%d %I:%M %P')
+    started = datetime.strptime(chat['started'], '%Y-%m-%d %H:%M:%S')
     if (now - started).total_seconds() >= 900:
         continue
 
@@ -34,20 +34,21 @@ for chat in chats:
 print('{} active chats, {} unanswered'.format(num_active, num_unanswered))
 
 # For each user...
-users = client.all('users').get_list()
+client.set_options(version = 'v1')
+users = client.all('users')
 num_users = 0
-for user in users:
-    if user['show'] != 'chat' or user['show'] != 'available':
+for user in users.get_list():
+    if user['show'] != u'chat' and user['show'] != u'available':
         continue
 
     # Is that user staffing any queue?
     staffing = False
-    assignments = user.all('assignments').get_list()
+    assignments = users.one(user['id']).all('assignments').get_list()
     for assignment in assignments:
         if assignment['enabled']:
             staffing = True
 
-    # If so,then great!
+    # If so, then great!
     if staffing:
         num_users += 1
 

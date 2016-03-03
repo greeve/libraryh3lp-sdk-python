@@ -42,6 +42,9 @@ FAQ
 edit-question.py
     Edit your FAQ in the console.  Because consoles rock.
 
+edit-template.py
+    Edit your FAQ templates in the console.  Because consoles rock.
+
 import-faq.py
     Bulk import a list of questions and answers into a LibraryH3lp FAQ.
     Expects a CSV file with columns corresponding to question, answer,
@@ -63,8 +66,8 @@ new-user-alert.py
     Get notified of new users.
 
 new-user-setup.py
-    Create a new user, automatically adding it to queues and setting up
-    buddy relationships.
+    Create a new user, automatically adding it to queues, conference
+    rooms, canned message pools, and setting up buddy relationships.
 
 SMS
 ---

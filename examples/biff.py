@@ -15,9 +15,9 @@ import time
 # Fetch all email threads, including their read status and the time of
 # the last message.
 def current_threads(client, mailboxes):
-    threads = client.all('emails').get_list({'mailboxes': mailboxes})
+    threads = client.all('emails').get_list({'mailboxes[]': mailboxes})
     for t in threads:
-        t['updated'] = datetime.strptime(t['updated'], '%Y-%m-%d %I:%M %P')
+        t['updated'] = datetime.strptime(t['updated'], '%Y-%m-%d %I:%M %p')
     return threads
 
 # Return only those threads we have not seen before.
@@ -39,7 +39,7 @@ def main():
     while True:
         time.sleep(300)
         threads = current_threads(client, mailboxes)
-        new_treads = new_or_updated(prev_threads, threads)
+        new_threads = new_or_updated(prev_threads, threads)
         notify_user(new_threads)
         prev_threads = threads
 

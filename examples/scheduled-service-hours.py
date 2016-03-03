@@ -23,7 +23,7 @@ hour = datetime.now().hour
 def enable_queue(queue, operators):
     assignments = client.find_queue_by_name(queue).all('operators')
     for assignment in assignments.get_list():
-        enabled = assignment['user'] in operators
+        enabled = assignment['name'] in operators
         if enabled != assignment['enabled']:
             assignments.one(assignment['id']).patch({'enabled': enabled})
 
