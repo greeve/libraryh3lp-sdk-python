@@ -5,4 +5,4 @@ dist:
 	python setup.py bdist_wheel
 
 publish:
-	python setup.py sdist bdist_wheel upload -r https://testpypi.python.org/pypi
+	twine upload dist/*

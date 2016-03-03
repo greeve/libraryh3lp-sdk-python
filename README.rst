@@ -1,3 +1,10 @@
+Install
+=======
+
+Via Python Package Authority::
+
+    pip install lh3api
+
 Configuration
 ============
 
