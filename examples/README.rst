@@ -20,6 +20,10 @@ kill-switch.py
     Somebody forgot to log out.  Take the queue offline so patrons don't
     mistakenly think you're available.
 
+one-shot.py
+    Send a guest-initiated a call-out to a queue or user. When someone answers
+    the call-out, the guest is notified and the response is shown to the guest.
+
 rolling-transcript-deletion.py
     Each morning, delete the transcripts from a month ago.
 
