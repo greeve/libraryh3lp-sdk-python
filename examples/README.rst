@@ -1,6 +1,10 @@
 Chat
 ----
 
+AnswerBot.py
+    Simple chat bot that responds to basic queries (no AI) and can transfer
+    guests to a human upon request.
+
 check-service.py
     Look to see if your services are online and, if not, why not.  Also
     reports if you have too few operators staffing.
