@@ -53,6 +53,11 @@ edit-question.py
 edit-template.py
     Edit your FAQ templates in the console.  Because consoles rock.
 
+export-faq.py
+    Bulk export of all questions and answers in a LibraryH3lp FAQ.
+    Produces a CSV file with columns corresponding to question, answer, 
+    list of topic tags, views, likes, and dislikes.
+
 import-faq.py
     Bulk import a list of questions and answers into a LibraryH3lp FAQ.
     Expects a CSV file with columns corresponding to question, answer,
